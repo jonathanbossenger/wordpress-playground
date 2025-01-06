@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file by a CI job
 that runs on every NPM release. The file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 format.
 
+## [v1.0.20] (2025-01-06) 
+
+### Website
+
+- Avoid login issue in deployment end-to-end tests. ([#2065](https://github.com/WordPress/wordpress-playground/pull/2065))
+
+### Contributors
+
+The following contributors merged PRs in this release:
+
+@brandonpayton
+
+
 ## [v1.0.19] (2024-12-30) 
 
 
