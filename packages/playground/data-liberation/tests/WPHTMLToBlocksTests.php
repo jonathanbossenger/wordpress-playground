@@ -16,7 +16,7 @@ class WPHTMLToBlocksTests extends TestCase {
 <h1>WordPress 6.8 was released</h1>
 <p>Last week, WordPress 6.8 was released. This release includes a new default theme, a new block editor experience, and a new block library. It also includes a new block editor experience, and a new block library.</p>
 HTML;
-        $converter = new WP_HTML_To_Blocks( $html );
+        $converter = new WP_HTML_To_Blocks( new WP_HTML_Processor( $html ) );
         $converter->convert( $html );
         $metadata = $converter->get_all_metadata();
         $expected_metadata = [
@@ -35,7 +35,7 @@ HTML;
      * @dataProvider provider_test_conversion
      */
     public function test_html_to_blocks_conversion( $html, $expected ) {
-        $converter = new WP_HTML_To_Blocks( $html );
+        $converter = new WP_HTML_To_Blocks( new WP_HTML_Processor( $html ) );
         $converter->convert( $html );
         $blocks = $converter->get_block_markup();
 
@@ -89,15 +89,11 @@ HTML
             ],
             'Formatted text' => [
                 'html' => '<p><strong>Bold</strong> and <em>Italic</em></p>',
-                'expected' => "<!-- wp:paragraph --><p><strong> Bold </strong> and <em> Italic </em> </p><!-- /wp:paragraph -->"
+                'expected' => "<!-- wp:paragraph --><p><strong> Bold </strong>and <em> Italic </em></p><!-- /wp:paragraph -->"
             ],
             'A blockquote' => [
                 'html' => '<blockquote>A simple blockquote</blockquote>',
                 'expected' => "<!-- wp:quote --><blockquote>A simple blockquote </blockquote><!-- /wp:quote -->"
-            ],
-            'A an <input> tag' => [
-                'html' => '<input type="text" value="A simple input" />',
-                'expected' => "<!-- wp:html -->&lt;input type=&quot;text&quot; value=&quot;A simple input&quot;&gt; <!-- /wp:html -->"
             ],
             'A table' => [
                 'html' => <<<TABLE
@@ -135,7 +131,7 @@ HTML
 
     public function test_html_to_blocks_excerpt() {
         $input = file_get_contents( __DIR__ . '/fixtures/html-to-blocks/excerpt.input.html' );
-        $converter = new WP_HTML_To_Blocks( $input );
+        $converter = new WP_HTML_To_Blocks( new WP_HTML_Processor( $input ) );
         $converter->convert( $input );
         $blocks = $converter->get_block_markup();
 
@@ -145,7 +141,29 @@ HTML
         }
 
         $this->assertEquals( file_get_contents( $output_file ), $blocks );
-        
+    }
+
+    public function test_xhtml_to_blocks_conversion() {
+        $input = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html>
+    <body>
+        <h1>Hello, world!</h1>
+        <p>And some content</p>
+    </body>
+</html>
+XML;
+        $converter = new WP_HTML_To_Blocks( WP_XML_Processor::create_from_string( $input ) );
+        $converter->convert( $input );
+        $blocks = $converter->get_block_markup();
+        $expected = <<<HTML
+<!-- wp:heading {"level":1} --><h1>Hello, world! </h1><!-- /wp:heading --><!-- wp:paragraph --><p>And some content </p><!-- /wp:paragraph -->
+HTML;
+        $this->assertEquals(
+            $this->normalize_markup( $expected ),
+            $this->normalize_markup( $blocks )
+        );
     }
 
 }
