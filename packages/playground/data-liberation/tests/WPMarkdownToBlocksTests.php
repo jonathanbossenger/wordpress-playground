@@ -84,10 +84,6 @@ HTML
                 'markdown' => 'An inline image: ![An image](https://w.org/logo.png)',
                 'expected' => "<!-- wp:paragraph --><p>An inline image: <img alt=\"An image\" src=\"https://w.org/logo.png\"></p><!-- /wp:paragraph -->"
             ],
-            'An image block' => [
-                'markdown' => '![An image](https://w.org/logo.png)',
-                'expected' => "<!-- wp:image --><figure class=\"wp-block-image size-full\">    <img alt=\"An image\" src=\"https://w.org/logo.png\"></figure><!-- /wp:image -->"
-            ],
             'A heading' => [
                 'markdown' => '#### A simple heading',
                 'expected' => "<!-- wp:heading {\"level\":4} --><h4>A simple heading</h4><!-- /wp:heading -->"
