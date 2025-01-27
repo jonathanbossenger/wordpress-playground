@@ -9,6 +9,11 @@ All notable changes to this project are documented in this file by a CI job
 that runs on every NPM release. The file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 format.
 
+## [v1.0.23] (2025-01-27) 
+
+
+
+
 ## [v1.0.22] (2025-01-20) 
 
 
