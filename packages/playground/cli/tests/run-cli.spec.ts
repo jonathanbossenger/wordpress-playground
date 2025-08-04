@@ -11,9 +11,7 @@ import { readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { MinifiedWordPressVersionsList } from '@wp-playground/wordpress-builds';
 
-// TODO: Fix or rework these tests because it is difficult to run them now that
-// runCLI() launches a Worker.
-describe.skip('cli-run', () => {
+describe('run-cli', () => {
 	let cliServer: RunCLIServer;
 
 	afterEach(async () => {
@@ -85,6 +83,7 @@ describe.skip('cli-run', () => {
 		expect(response.text).toContain('<title>My Blog Name</title>');
 	});
 
+	// @TODO: Also test with Blueprints v2.
 	describe('auto-mount', () => {
 		const getDirectoryChecksum = async (dir: string) => {
 			const hash = createHash('sha256');
@@ -111,7 +110,7 @@ describe.skip('cli-run', () => {
 
 		test(`should run a plugin project using --auto-mount`, async () => {
 			vi.spyOn(process, 'cwd').mockReturnValue(
-				path.join(__dirname, 'mount-examples', 'plugin')
+				path.join(import.meta.dirname, 'mount-examples', 'plugin')
 			);
 			cliServer = await runCLI({
 				command: 'server',
@@ -137,7 +136,7 @@ describe.skip('cli-run', () => {
 		});
 		test(`should run a theme project using --auto-mount`, async () => {
 			vi.spyOn(process, 'cwd').mockReturnValue(
-				path.join(__dirname, 'mount-examples', 'theme')
+				path.join(import.meta.dirname, 'mount-examples', 'theme')
 			);
 			cliServer = await runCLI({
 				command: 'server',
@@ -158,7 +157,7 @@ describe.skip('cli-run', () => {
 
 		test(`should run a wp-content project using --auto-mount`, async () => {
 			vi.spyOn(process, 'cwd').mockReturnValue(
-				path.join(__dirname, 'mount-examples', 'wp-content')
+				path.join(import.meta.dirname, 'mount-examples', 'wp-content')
 			);
 			cliServer = await runCLI({
 				command: 'server',
@@ -173,7 +172,7 @@ describe.skip('cli-run', () => {
 
 		test('should run a static html project using --auto-mount', async () => {
 			vi.spyOn(process, 'cwd').mockReturnValue(
-				path.join(__dirname, 'mount-examples', 'static-html')
+				path.join(import.meta.dirname, 'mount-examples', 'static-html')
 			);
 			cliServer = await runCLI({
 				command: 'server',
@@ -189,7 +188,7 @@ describe.skip('cli-run', () => {
 
 		test('should run a php project using --auto-mount', async () => {
 			vi.spyOn(process, 'cwd').mockReturnValue(
-				path.join(__dirname, 'mount-examples', 'php')
+				path.join(import.meta.dirname, 'mount-examples', 'php')
 			);
 			cliServer = await runCLI({
 				command: 'server',
