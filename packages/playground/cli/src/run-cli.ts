@@ -26,6 +26,7 @@ import {
 	expandAutoMounts,
 	parseMountDirArguments,
 	parseMountWithDelimiterArguments,
+	containsFullWordPressInstallation,
 } from './mounts';
 import {
 	parseDefineStringArguments,
@@ -236,6 +237,16 @@ export async function parseOptionsAndRunCLI(argsToParse: string[]) {
 			'auto-mount': {
 				describe: `Automatically mount the specified directory. If no path is provided, mount the current working directory. You can mount a WordPress directory, a plugin directory, a theme directory, a wp-content directory, or any directory containing PHP and HTML files.`,
 				type: 'string',
+			},
+			develop: {
+				describe: `Enable development mode by mounting a directory, auto-detecting WordPress installation, setting up SQLite, and enabling debug constants. If no path is provided, uses the current working directory.`,
+				type: 'string',
+				coerce: (value?: string) => {
+					if (value === undefined || value === '') {
+						return process.cwd();
+					}
+					return path.resolve(process.cwd(), value);
+				},
 			},
 			'follow-symlinks': {
 				describe:
@@ -545,6 +556,21 @@ export async function parseOptionsAndRunCLI(argsToParse: string[]) {
 					}
 				}
 
+				if (args['develop']) {
+					const developPath = args['develop'] as string;
+					if (!existsSync(developPath)) {
+						throw new Error(
+							`Development path does not exist: ${developPath}`
+						);
+					}
+					const developStats = fs.statSync(developPath);
+					if (!developStats.isDirectory()) {
+						throw new Error(
+							`The specified --develop path is not a directory: '${developPath}'.`
+						);
+					}
+				}
+
 				if (args['experimental-multi-worker'] !== undefined) {
 					const cliCommand = args._[0] as string;
 					if (cliCommand !== 'server') {
@@ -732,6 +758,7 @@ export interface RunCLIArgs {
 	verbosity?: LogVerbosity;
 	wp?: string;
 	autoMount?: string;
+	develop?: string;
 	experimentalMultiWorker?: number;
 	experimentalTrace?: boolean;
 	internalCookieStore?: boolean;
@@ -858,6 +885,10 @@ export async function runCLI(args: RunCLIArgs): Promise<RunCLIServer | void> {
 			args = { ...args, autoMount: process.cwd() };
 		}
 		args = expandAutoMounts(args);
+	}
+
+	if (args.develop !== undefined) {
+		args = expandDevelopFlag(args);
 	}
 
 	if (args.wordpressInstallMode === undefined) {
@@ -1534,6 +1565,98 @@ function expandStartCommandArgs(
 	}
 
 	return newArgs as RunCLIArgs;
+}
+
+/**
+ * Expand the --develop flag into multiple internal arguments.
+ * 
+ * The --develop flag is a convenience that automatically:
+ * 1. Mounts the development directory at /wordpress using --mount-before-install
+ * 2. Auto-detects WordPress installation and sets --wordpress-install-mode
+ * 3. Sets up SQLite via blueprint steps
+ * 4. Enables debug constants (WP_DEBUG, WP_DEBUG_LOG, WP_DEBUG_DISPLAY, SCRIPT_DEBUG)
+ * 
+ * User-provided flags take precedence over --develop defaults.
+ */
+function expandDevelopFlag(args: RunCLIArgs): RunCLIArgs {
+	const developPath = args.develop!;
+	const newArgs = { ...args };
+
+	// 1. Mount the development directory at /wordpress (unless already mounted)
+	if (!args['mount-before-install'] || args['mount-before-install'].length === 0) {
+		newArgs['mount-before-install'] = [
+			{
+				hostPath: developPath,
+				vfsPath: '/wordpress',
+			},
+		];
+	}
+
+	// 2. Auto-detect WordPress installation and set install mode
+	if (!args.wordpressInstallMode) {
+		const hasFullWordPress = containsFullWordPressInstallation(developPath);
+		newArgs.wordpressInstallMode = hasFullWordPress
+			? 'install-from-existing-files'
+			: 'download-and-install';
+	}
+
+	// 3. Set up SQLite via blueprint steps (unless explicitly skipped)
+	if (!args.skipSqliteSetup) {
+		newArgs.skipSqliteSetup = true;
+		
+		const sqlitePluginPath = path.join(
+			__dirname,
+			'sqlite-database-integration-develop.zip'
+		);
+
+		const additionalSteps = [
+			// Install SQLite plugin
+			{
+				step: 'installPlugin',
+				pluginData: {
+					resource: 'url',
+					url: `file://${sqlitePluginPath}`,
+				},
+			},
+			// Copy db.php drop-in
+			{
+				step: 'cp',
+				fromPath: '/wordpress/wp-content/plugins/sqlite-database-integration-develop/db.copy',
+				toPath: '/wordpress/wp-content/db.php',
+			},
+			// Activate SQLite plugin
+			{
+				step: 'activatePlugin',
+				pluginPath: '/wordpress/wp-content/plugins/sqlite-database-integration-develop',
+			},
+		];
+
+		newArgs['additional-blueprint-steps'] = [
+			...additionalSteps,
+			...((args as any)['additional-blueprint-steps'] || []),
+		];
+	}
+
+	// 4. Enable debug constants (unless already set)
+	if (!args['define-bool']) {
+		newArgs['define-bool'] = {
+			WP_DEBUG: true,
+			WP_DEBUG_LOG: true,
+			WP_DEBUG_DISPLAY: true,
+			SCRIPT_DEBUG: true,
+		};
+	} else {
+		// Merge with existing define-bool, user values take precedence
+		newArgs['define-bool'] = {
+			WP_DEBUG: true,
+			WP_DEBUG_LOG: true,
+			WP_DEBUG_DISPLAY: true,
+			SCRIPT_DEBUG: true,
+			...args['define-bool'],
+		};
+	}
+
+	return newArgs;
 }
 
 export type SpawnedWorker = {
