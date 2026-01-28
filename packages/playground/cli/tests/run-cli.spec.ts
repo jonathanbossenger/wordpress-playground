@@ -639,6 +639,152 @@ describe.each(blueprintVersions)(
 			);
 		});
 
+		describe('--develop flag', () => {
+			afterEach(() => {
+				if ((process.cwd as unknown as MockInstance).mockRestore) {
+					(process.cwd as unknown as MockInstance).mockRestore();
+				}
+			});
+
+			test.skipIf(isBlueprintsV2OnWindows)(
+				'should mount directory and enable debug constants',
+				async () => {
+					const tmpDir = await mkdtemp(
+						path.join(tmpdir(), 'playground-develop-test-')
+					);
+					// Create an empty directory for WordPress to be downloaded into
+					try {
+						await using cliServer = await runCLI({
+							...suiteCliArgs,
+							command: 'server',
+							develop: tmpDir,
+						});
+
+						// Check that debug constants are enabled
+						await cliServer.playground.writeFile(
+							'/wordpress/debug-check.php',
+							`<?php
+							echo "WP_DEBUG: " . (defined('WP_DEBUG') && WP_DEBUG ? 'true' : 'false') . "\\n";
+							echo "WP_DEBUG_LOG: " . (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG ? 'true' : 'false') . "\\n";
+							echo "WP_DEBUG_DISPLAY: " . (defined('WP_DEBUG_DISPLAY') && WP_DEBUG_DISPLAY ? 'true' : 'false') . "\\n";
+							echo "SCRIPT_DEBUG: " . (defined('SCRIPT_DEBUG') && SCRIPT_DEBUG ? 'true' : 'false') . "\\n";
+							`
+						);
+						const debugUrl = new URL(
+							'/debug-check.php',
+							cliServer.serverUrl
+						);
+						const response = await fetch(debugUrl);
+						expect(response.status).toBe(200);
+						const text = await response.text();
+						expect(text).toContain('WP_DEBUG: true');
+						expect(text).toContain('WP_DEBUG_LOG: true');
+						expect(text).toContain('WP_DEBUG_DISPLAY: true');
+						expect(text).toContain('SCRIPT_DEBUG: true');
+					} finally {
+						// Cleanup
+						rmSync(tmpDir, { recursive: true, force: true });
+					}
+				}
+			);
+
+			test.skipIf(isBlueprintsV2OnWindows)(
+				'should detect existing WordPress installation',
+				async () => {
+					const wordpressExamplePath = path.join(
+						import.meta.dirname,
+						'mount-examples',
+						'wordpress'
+					);
+					await using cliServer = await runCLI({
+						...suiteCliArgs,
+						command: 'server',
+						develop: wordpressExamplePath,
+					});
+
+					// Verify that WordPress is running
+					const homeUrl = new URL('/', cliServer.serverUrl);
+					const response = await fetch(homeUrl);
+					expect(response.status).toBe(200);
+					const text = await response.text();
+					expect(text).toContain(
+						`<title>${expectedHomePageTitle}</title>`
+					);
+				}
+			);
+
+			test.skipIf(isBlueprintsV2OnWindows)(
+				'should use current directory when no path is provided',
+				async () => {
+					const tmpDir = await mkdtemp(
+						path.join(tmpdir(), 'playground-develop-cwd-test-')
+					);
+					try {
+						vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+						await using cliServer = await runCLI({
+							...suiteCliArgs,
+							command: 'server',
+							develop: process.cwd(),
+						});
+
+						// Verify server started successfully
+						const homeUrl = new URL('/', cliServer.serverUrl);
+						const response = await fetch(homeUrl);
+						expect(response.status).toBe(200);
+					} finally {
+						// Cleanup
+						rmSync(tmpDir, { recursive: true, force: true });
+					}
+				}
+			);
+
+			test.skipIf(isBlueprintsV2OnWindows)(
+				'should respect user-provided debug constants',
+				async () => {
+					const tmpDir = await mkdtemp(
+						path.join(tmpdir(), 'playground-develop-override-')
+					);
+					try {
+						await using cliServer = await runCLI({
+							...suiteCliArgs,
+							command: 'server',
+							develop: tmpDir,
+							'define-bool': {
+								WP_DEBUG: false,
+								CUSTOM_CONSTANT: true,
+							},
+						});
+
+						// Check that user constants take precedence
+						await cliServer.playground.writeFile(
+							'/wordpress/override-check.php',
+							`<?php
+							echo "WP_DEBUG: " . (defined('WP_DEBUG') && WP_DEBUG ? 'true' : 'false') . "\\n";
+							echo "CUSTOM_CONSTANT: " . (defined('CUSTOM_CONSTANT') && CUSTOM_CONSTANT ? 'true' : 'false') . "\\n";
+							echo "WP_DEBUG_LOG: " . (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG ? 'true' : 'false') . "\\n";
+							`
+						);
+						const overrideUrl = new URL(
+							'/override-check.php',
+							cliServer.serverUrl
+						);
+						const response = await fetch(overrideUrl);
+						expect(response.status).toBe(200);
+						const text = await response.text();
+						// User override should set WP_DEBUG to false
+						expect(text).toContain('WP_DEBUG: false');
+						// Custom constant should be set
+						expect(text).toContain('CUSTOM_CONSTANT: true');
+						// Other defaults should still apply
+						expect(text).toContain('WP_DEBUG_LOG: true');
+					} finally {
+						// Cleanup
+						rmSync(tmpDir, { recursive: true, force: true });
+					}
+				}
+			);
+		});
+
 		describe('verbosity', () => {
 			let output: string[];
 			// Track cliServer at describe level for cleanup even if tests timeout
