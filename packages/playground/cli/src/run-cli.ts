@@ -1604,10 +1604,21 @@ function expandDevelopFlag(args: RunCLIArgs): RunCLIArgs {
 	if (!args.skipSqliteSetup) {
 		newArgs.skipSqliteSetup = true;
 		
-		const sqlitePluginPath = path.join(
+		// Try to find the SQLite plugin zip file
+		// In built version: it's in the dist folder alongside the built code
+		// In development: it's in the wordpress-builds package
+		let sqlitePluginPath = path.join(
 			__dirname,
 			'sqlite-database-integration-develop.zip'
 		);
+		
+		// If not found in __dirname, try the source location
+		if (!existsSync(sqlitePluginPath)) {
+			sqlitePluginPath = path.join(
+				process.cwd(),
+				'packages/playground/wordpress-builds/src/sqlite-database-integration/sqlite-database-integration-develop.zip'
+			);
+		}
 
 		const additionalSteps = [
 			// Install SQLite plugin
