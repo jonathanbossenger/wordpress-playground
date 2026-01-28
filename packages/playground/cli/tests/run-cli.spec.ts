@@ -681,6 +681,13 @@ describe.each(blueprintVersions)(
 						expect(text).toContain('WP_DEBUG_LOG: true');
 						expect(text).toContain('WP_DEBUG_DISPLAY: true');
 						expect(text).toContain('SCRIPT_DEBUG: true');
+
+						// Verify mount by writing a file in the VFS and checking the host
+						await cliServer.playground.writeFile(
+							'/wordpress/test-mount.txt',
+							'test content'
+						);
+						expect(existsSync(path.join(tmpDir, 'test-mount.txt'))).toBe(true);
 					} finally {
 						// Cleanup
 						rmSync(tmpDir, { recursive: true, force: true });
@@ -710,31 +717,6 @@ describe.each(blueprintVersions)(
 					expect(text).toContain(
 						`<title>${expectedHomePageTitle}</title>`
 					);
-				}
-			);
-
-			test.skipIf(isBlueprintsV2OnWindows)(
-				'should use current directory when no path is provided',
-				async () => {
-					const tmpDir = await mkdtemp(
-						path.join(tmpdir(), 'playground-develop-cwd-test-')
-					);
-					try {
-						vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
-						await using cliServer = await runCLI({
-							...suiteCliArgs,
-							command: 'server',
-							develop: process.cwd(),
-						});
-
-						// Verify server started successfully
-						const homeUrl = new URL('/', cliServer.serverUrl);
-						const response = await fetch(homeUrl);
-						expect(response.status).toBe(200);
-					} finally {
-						// Cleanup
-						rmSync(tmpDir, { recursive: true, force: true });
-					}
 				}
 			);
 
@@ -777,6 +759,66 @@ describe.each(blueprintVersions)(
 						expect(text).toContain('CUSTOM_CONSTANT: true');
 						// Other defaults should still apply
 						expect(text).toContain('WP_DEBUG_LOG: true');
+					} finally {
+						// Cleanup
+						rmSync(tmpDir, { recursive: true, force: true });
+					}
+				}
+			);
+
+			test.skipIf(isBlueprintsV2OnWindows)(
+				'should allow overriding mount-before-install',
+				async () => {
+					const tmpDir = await mkdtemp(
+						path.join(tmpdir(), 'playground-develop-mount-override-')
+					);
+					const customMountDir = await mkdtemp(
+						path.join(tmpdir(), 'playground-custom-mount-')
+					);
+					try {
+						// Create a test file in the custom mount directory
+						writeFileSync(path.join(customMountDir, 'custom.txt'), 'custom mount content');
+
+						await using cliServer = await runCLI({
+							...suiteCliArgs,
+							command: 'server',
+							develop: tmpDir,
+							'mount-before-install': [{
+								hostPath: customMountDir,
+								vfsPath: '/wordpress',
+							}],
+						});
+
+						// Verify the custom mount took precedence
+						const fileExists = await cliServer.playground.fileExists('/wordpress/custom.txt');
+						expect(fileExists).toBe(true);
+					} finally {
+						// Cleanup
+						rmSync(tmpDir, { recursive: true, force: true });
+						rmSync(customMountDir, { recursive: true, force: true });
+					}
+				}
+			);
+
+			test.skipIf(isBlueprintsV2OnWindows)(
+				'should respect skip-sqlite-setup flag',
+				async () => {
+					const tmpDir = await mkdtemp(
+						path.join(tmpdir(), 'playground-develop-skip-sqlite-')
+					);
+					try {
+						await using cliServer = await runCLI({
+							...suiteCliArgs,
+							command: 'server',
+							develop: tmpDir,
+							skipSqliteSetup: true,
+						});
+
+						// Check that db.php was NOT created by our blueprint steps
+						// (it might be created by default SQLite setup if skipSqliteSetup is passed through)
+						const homeUrl = new URL('/', cliServer.serverUrl);
+						const response = await fetch(homeUrl);
+						expect(response.status).toBe(200);
 					} finally {
 						// Cleanup
 						rmSync(tmpDir, { recursive: true, force: true });

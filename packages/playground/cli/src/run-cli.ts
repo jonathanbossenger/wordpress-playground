@@ -1569,13 +1569,13 @@ function expandStartCommandArgs(
 
 /**
  * Expand the --develop flag into multiple internal arguments.
- * 
+ *
  * The --develop flag is a convenience that automatically:
  * 1. Mounts the development directory at /wordpress using --mount-before-install
  * 2. Auto-detects WordPress installation and sets --wordpress-install-mode
  * 3. Sets up SQLite via blueprint steps
  * 4. Enables debug constants (WP_DEBUG, WP_DEBUG_LOG, WP_DEBUG_DISPLAY, SCRIPT_DEBUG)
- * 
+ *
  * User-provided flags take precedence over --develop defaults.
  */
 function expandDevelopFlag(args: RunCLIArgs): RunCLIArgs {
@@ -1594,16 +1594,22 @@ function expandDevelopFlag(args: RunCLIArgs): RunCLIArgs {
 
 	// 2. Auto-detect WordPress installation and set install mode
 	if (!args.wordpressInstallMode) {
-		const hasFullWordPress = containsFullWordPressInstallation(developPath);
-		newArgs.wordpressInstallMode = hasFullWordPress
-			? 'install-from-existing-files'
-			: 'download-and-install';
+		try {
+			const hasFullWordPress = containsFullWordPressInstallation(developPath);
+			newArgs.wordpressInstallMode = hasFullWordPress
+				? 'install-from-existing-files'
+				: 'download-and-install';
+		} catch (error) {
+			throw new Error(
+				`Failed to read development directory "${developPath}": ${error instanceof Error ? error.message : String(error)}`
+			);
+		}
 	}
 
 	// 3. Set up SQLite via blueprint steps (unless explicitly skipped)
 	if (!args.skipSqliteSetup) {
 		newArgs.skipSqliteSetup = true;
-		
+
 		// Try to find the SQLite plugin zip file
 		// In built version: it's in the dist folder alongside the built code
 		// In development: it's in the wordpress-builds package
@@ -1611,12 +1617,19 @@ function expandDevelopFlag(args: RunCLIArgs): RunCLIArgs {
 			__dirname,
 			'sqlite-database-integration-develop.zip'
 		);
-		
+
 		// If not found in __dirname, try the source location
 		if (!existsSync(sqlitePluginPath)) {
 			sqlitePluginPath = path.join(
 				process.cwd(),
 				'packages/playground/wordpress-builds/src/sqlite-database-integration/sqlite-database-integration-develop.zip'
+			);
+		}
+
+		// Validate that the SQLite plugin file exists
+		if (!existsSync(sqlitePluginPath)) {
+			throw new Error(
+				`SQLite plugin not found. Expected at: ${sqlitePluginPath}`
 			);
 		}
 
